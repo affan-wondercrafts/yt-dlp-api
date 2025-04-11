@@ -2,7 +2,13 @@ services:
   - type: web
     name: video-downloader-backend
     env: node
-    buildCommand: yarn install && apt-get update && apt-get install -y python3 python3-pip && pip3 install yt-dlp && yarn build
+    buildCommand: |
+      corepack enable
+      yarn set version 4.9.0
+      yarn config set nodeLinker node-modules
+      yarn install
+      apt-get update && apt-get install -y python3 python3-pip
+      pip3 install yt-dlp
     startCommand: yarn start
     envVars:
       - key: PORT
