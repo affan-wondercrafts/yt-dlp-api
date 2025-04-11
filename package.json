@@ -1,6 +1,5 @@
 {
 	"name": "yt-dlp-api",
-	"packageManager": "yarn@4.9.0",
 	"type": "module",
 	"scripts": {
 		"start": "node dist/server.js",
