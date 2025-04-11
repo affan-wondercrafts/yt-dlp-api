@@ -3,6 +3,8 @@ services:
     name: video-downloader-backend
     env: node
     buildCommand: |
+      yarn set version 4.9.0
+      yarn config set nodeLinker node-modules
       corepack enable
       corepack prepare yarn@4.9.0 --activate
       yarn install --immutable
