@@ -8,7 +8,7 @@ services:
       yarn install --immutable
       apt-get update && apt-get install -y python3 python3-pip
       pip3 install yt-dlp
-    startCommand: npm start
+    startCommand: yarn start
     envVars:
       - key: PORT
         value: 10000
