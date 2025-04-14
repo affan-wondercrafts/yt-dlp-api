@@ -283,14 +283,16 @@ app.post('/api/direct-download', async (req: any, res: any) => {
 				else reject(new Error(`Failed to get video title: ${error}`));
 			});
 		});
-
-		// Sanitize title
 		const sanitizedTitle = videoTitle
-			.replace(/[\/\\:*?"<>|]/g, '')
-			.substring(0, 100);
-		const filename = `${sanitizedTitle}.${isAudioOnly ? 'mp3' : 'mp4'}`;
+			.replace(/[^\x20-\x7E]/g, '') // remove non-ASCII characters
+			.replace(/[\/\\:*?"<>|]/g, '') // remove forbidden filename characters
+			.replace(/\s+/g, ' ') // normalize whitespace
+			.trim()
+			.substring(0, 100); // limit length
 
-		// Set response headers for download
+		const filename = `${sanitizedTitle || 'video'}.${
+			isAudioOnly ? 'mp3' : 'mp4'
+		}`;
 		res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 		res.setHeader('Content-Type', isAudioOnly ? 'audio/mpeg' : 'video/mp4');
 
