@@ -62,12 +62,19 @@ app.post('/api/fetch-formats', async (req: any, res: any) => {
 
 		console.time('yt-dlp-fetch');
 		const formatsJson = await new Promise<string>((resolve, reject) => {
+			// const proc = spawn('yt-dlp', [
+			// 	'--skip-download',
+			// 	'--no-warnings',
+			// 	'--no-check-certificate',
+			// 	'--dump-json',
+			// 	'--no-playlist',
+			// 	url,
+			// ]);
 			const proc = spawn('yt-dlp', [
-				'--skip-download',
-				'--no-warnings',
-				'--no-check-certificate',
 				'--dump-json',
 				'--no-playlist',
+				'--no-call-home',
+				'--no-cache-dir',
 				url,
 			]);
 
@@ -241,6 +248,98 @@ app.post('/api/download-video', async (req: any, res: any) => {
 	} catch (error) {
 		console.error('Error downloading video:', error);
 		return res.status(500).json({
+			error:
+				'Failed to download video: ' +
+				(error instanceof Error ? error.message : String(error)),
+		});
+	}
+});
+
+app.post('/api/direct-download', async (req: any, res: any) => {
+	try {
+		const { url, formatId, isAudioOnly } = req.body;
+		console.log('Direct download request:', req.body);
+
+		if (!url || !formatId) {
+			return res.status(400).json({ error: 'URL and format ID are required' });
+		}
+
+		// Step 1: Get video title
+		const videoTitle = await new Promise<string>((resolve, reject) => {
+			const infoProc = spawn('yt-dlp', [
+				'--get-title',
+				'--restrict-filenames',
+				url,
+			]);
+
+			let output = '';
+			let error = '';
+
+			infoProc.stdout.on('data', (data) => (output += data.toString()));
+			infoProc.stderr.on('data', (data) => (error += data.toString()));
+
+			infoProc.on('close', (code) => {
+				if (code === 0) resolve(output.trim());
+				else reject(new Error(`Failed to get video title: ${error}`));
+			});
+		});
+
+		// Sanitize title
+		const sanitizedTitle = videoTitle
+			.replace(/[\/\\:*?"<>|]/g, '')
+			.substring(0, 100);
+		const filename = `${sanitizedTitle}.${isAudioOnly ? 'mp3' : 'mp4'}`;
+
+		// Set response headers for download
+		res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+		res.setHeader('Content-Type', isAudioOnly ? 'audio/mpeg' : 'video/mp4');
+
+		// yt-dlp args
+		// const args = ['--no-playlist', '-f', formatId, '-o', '-', url];
+		const args = [
+			'--no-playlist',
+			'-f',
+			`${
+				url.includes('youtu')
+					? `${formatId}+bestaudio[ext=m4a]/bestaudio`
+					: formatId
+			}`,
+			'-o',
+			'-',
+			url,
+		];
+		if (!isAudioOnly) {
+			args.push('--merge-output-format', 'mp4');
+		}
+
+		const proc = spawn('yt-dlp', args);
+		console.log('yt-dlp started with:', args);
+
+		// Pipe yt-dlp stdout to response
+		proc.stdout.pipe(res);
+
+		proc.stderr.on('data', (data) => {
+			console.error('yt-dlp error:', data.toString());
+		});
+
+		proc.on('close', (code) => {
+			if (code !== 0) {
+				console.error('Download failed with code', code);
+				if (!res.headersSent) {
+					res.status(500).end('Download failed');
+				}
+			} else {
+				console.log('yt-dlp download finished');
+			}
+		});
+
+		// Abort on client disconnect
+		req.on('close', () => {
+			if (!proc.killed) proc.kill();
+		});
+	} catch (error) {
+		console.error('Error downloading video:', error);
+		res.status(500).json({
 			error:
 				'Failed to download video: ' +
 				(error instanceof Error ? error.message : String(error)),
